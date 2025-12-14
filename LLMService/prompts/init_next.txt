@@ -1,0 +1,17 @@
+[Full Theorem]:
+{thm_decl} 
+
+[Current Goal]:
+{goal_state}
+
+[User Hint]:
+{hint}
+
+TASK: Suggest the most efficient next tactic step.
+
+GUIDELINES:
+1.  **Automation First**: If `aesop`, `simp_all`, `linarith` etc. can solve it, output that.
+2.  **Structure**: You are allowed to use multi-line blocks (e.g., `induction`, `cases`, `calc`) if it represents ONE logical peak.
+3.  **The "One Peak" Rule**: Do not write the *entire* proof. Focus on clearing the immediate hurdle.
+
+Your final output MUST be a valid Lean code block.

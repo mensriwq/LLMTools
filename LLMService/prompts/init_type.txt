@@ -1,0 +1,22 @@
+[Full Theorem]:
+{thm_decl}
+
+[Current Goal]:
+{goal_state}
+
+[User Hint]:
+{hint}
+
+TASK:
+Propose a single intermediate lemma (type) that would make progress towards the goal.
+
+GUIDELINES:
+1. If the User Hint specifies a lemma (e.g., "use induction on n" or "assert n > 0"), formulate that exact statement.
+2. If no hint, analyze the logical gap. What missing fact would make the goal trivial?
+3. Define the type clearly using `have` or `suffices`.
+4. Leave the proof of this new fact as `sorry`.
+
+EXAMPLE OUTPUT:
+```lean
+have h_aux : a + b > 0 := by sorry
+```

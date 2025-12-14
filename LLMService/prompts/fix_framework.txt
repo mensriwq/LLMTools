@@ -1,0 +1,25 @@
+We are fixing a failed PROOF SKELETON.
+
+1. Full Theorem Statement:
+   {thm_decl}
+
+2. CONTEXT
+   Failed Skeleton:
+   ```lean
+   {prev_tactic}
+   ```
+   Error Message: {error_msg}
+
+3. YOUR DIAGNOSIS
+   {diagnosis}
+
+4. SEARCH RESULTS
+   {search_results}
+
+5. CURRENT GOAL
+   {goal_state}
+
+INSTRUCTIONS:
+1. Analyze why the structure failed.
+2. Rewrite the proof skeleton inside a ```lean``` block.
+3. Ensure syntax is valid and structure is logical.

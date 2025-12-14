@@ -1,0 +1,16 @@
+# Lake build artifacts
+build/
+.lake/
+
+# Python virtual environment
+.venv/
+__pycache__/
+*.pyc
+
+# IDE settings
+.vscode/
+.idea/
+
+# OS-specific files
+.DS_Store
+Thumbs.db/.lake

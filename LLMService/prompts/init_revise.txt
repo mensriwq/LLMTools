@@ -1,0 +1,13 @@
+[Full Theorem]:
+{thm_decl}
+
+[Current Goal]:
+{goal_state}
+
+[User Code to Revise]:
+```lean
+{hint}
+```
+
+OUTPUT:
+Return the corrected code block.

@@ -1,0 +1,36 @@
+[Full Theorem Statement]:
+{thm_decl}
+
+[Current Local Context & Goal]:
+{goal_state}
+
+[User Hint]:
+{hint}
+
+TASK:
+Provide a comprehensive PROOF SKELETON for the current goal.
+Your output should be a structured Lean 4 proof block that divides the problem into sub-problems.
+
+GUIDELINES:
+1. Use high-level tactics like `induction`, `cases`, `calc`, `obtain`, `have`, or `suffices`.
+2. Do NOT solve the hard parts. Use `sorry` for the actual proofs of sub-goals.
+3. Add brief comments explaining the structure.
+4. Ensure the variable names match the context.
+5. The code must be syntactically valid Lean 4.
+
+EXAMPLE OUTPUT:
+```lean
+induction n with
+| zero =>
+  -- Base case logic
+  sorry
+| succ n ih =>
+  -- Step case logic
+  have h_aux : n > 0 := by sorry
+  rw [Nat.add_comm]
+  apply ih
+  sorry
+```
+
+OUTPUT FORMAT:
+Return ONLY the code block inside ```lean ... ```.

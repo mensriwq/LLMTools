@@ -1,0 +1,23 @@
+We are fixing a failed LEMMA DECLARATION.
+
+1. Full Theorem Statement:
+   {thm_decl}
+
+2. CONTEXT
+   Failed Code: `{prev_tactic}`
+   Error Message: {error_msg}
+
+3. YOUR DIAGNOSIS
+   {diagnosis}
+
+4. SEARCH RESULTS
+   {search_results}
+
+5. CURRENT GOAL
+   {goal_state}
+
+INSTRUCTIONS:
+1. The error usually implies a syntax error or referencing a variable/theorem that doesn't exist.
+2. Rewrite the `have` / `suffices` statement.
+3. Keep using `sorry` for the proof.
+4. Output only the corrected code block.

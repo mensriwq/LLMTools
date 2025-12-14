@@ -1,0 +1,25 @@
+We are iteratively fixing a code snippet.
+
+1. Full Theorem Statement:
+   {thm_decl}
+
+2. CONTEXT
+   Failed Code (from last attempt):
+   ```lean
+   {prev_tactic}
+   ```
+   Error Message: {error_msg}
+
+3. DIAGNOSIS
+   {diagnosis}
+
+4. SEARCH RESULTS
+   {search_results}
+
+5. CURRENT GOAL
+   {goal_state}
+
+INSTRUCTIONS:
+1. Fix the error in the "Failed Code".
+2. Output the fully corrected code block.
+

@@ -1,0 +1,24 @@
+We are fixing a failed proof step.
+
+1. Full Theorem Statement:
+   {thm_decl}
+
+2. CONTEXT
+   Failed Tactic: `{prev_tactic}`
+   Error Message: {error_msg}
+
+3. YOUR DIAGNOSIS
+   {diagnosis}
+
+4. SEARCH RESULTS (from Lean Library)
+   ```text
+   {search_results}
+   ```
+
+5. CURRENT GOAL
+   {goal_state}
+
+**INSTRUCTIONS:**
+1. Use <think> tags to think.
+2. Plan the fix.
+3. Output the CORRECTED code inside a ```lean``` block.

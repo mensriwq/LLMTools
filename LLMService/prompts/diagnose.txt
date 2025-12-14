@@ -1,0 +1,17 @@
+The previous code failed.
+Code: `{prev_tactic}`
+Error: {error_msg}
+
+Current Goal:
+{goal_state}
+
+TASK:
+1. Briefly analyze WHY it failed (e.g., wrong theorem name, argument mismatch, type error).
+2. Determine what keywords to search for to fix this.
+   - If the error is about a missing identifier or theorem, verify the name.
+   - If the error is about arguments, search the theorem to check its signature (arguments name/type, implicit/explicit arguments, sometimes use @).
+   - If it's a syntax error or logical error you can fix without search, use "NONE".
+
+OUTPUT FORMAT:
+ANALYSIS: <Short explanation of the error>
+SEARCH: <keywords separated by space OR "NONE">
