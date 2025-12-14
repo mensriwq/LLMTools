@@ -1,6 +1,6 @@
-[package]
 name = "llm-tools"
 version = "0.1.0"
+defaultTargets = ["LLMTools"]
 
 [[lean_lib]]
 name = "LLMTools"
