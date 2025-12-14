@@ -55,16 +55,45 @@
 - **Lean 4**: 确保你已经通过 `elan` 安装了 Lean 4 工具链。
 - **Python**: 版本 >= 3.9。
 
-### 2. 下载项目
+### 2. 添加项目依赖
 
-将此项目克隆到你的本地机器。
+要在一个已有的 Lean 4 项目中使用此工具，请在你的 `lakefile` 中添加它作为依赖项。
+
+**对于使用 `lakefile.toml` 的项目：**
+```toml
+# lakefile.toml
+
+# ... 其他配置 ...
+
+[[require]]
+name = "llm-tools"
+git = "https://github.com/mensriwq/LLMTools.git"
+rev = "v0.2.0" # 或者一个更新的版本标签, v0.2.0及以上可以工作
+```
+
+**对于使用 `lakefile.lean` 的项目：**
+```lean
+-- lakefile.lean
+import Lake
+open Lake DSL
+
+package «my-lean-project» where
+  -- ... 其他配置
+
+require «llm-tools» from git "https://github.com/mensriwq/LLMTools.git" @ "v0.2.0"
+```
+
+**添加依赖后，请在你的项目终端中运行 `lake update` 来下载并配置依赖：**
+```sh
+lake update llm-tools
+```
 
 ### 3. 配置 Python 环境
 
-建议使用虚拟环境。
+建议在你的项目中为 AI 服务使用独立的 Python 虚拟环境。
 
 ```sh
-# 创建一个虚拟环境
+# 在你的项目根目录创建一个虚拟环境
 python3 -m venv .venv
 
 # 激活虚拟环境
@@ -82,7 +111,6 @@ pip install openai requests beautifulsoup4 lxml
 AI 服务需要 API 密钥和其他配置才能运行。你需要创建以下环境变量, 请参考不同系统上设置环境变量的方法。
 
 ```sh
-
 # 你的 LLM API 密钥 (必需)
 LLM_API_KEY="sk-..."
 
@@ -96,45 +124,8 @@ LLM_MODEL="gpt-4o-mini"
 # On macOS/Linux, run `which python` after activating venv
 LEAN_LLM_PYTHON="/path/to/your/project/.venv/bin/python"
 # On Windows, it might be C:\path\to\your\project\.venv\Scripts\python.exe
-
-# 你希望使用的定理搜索服务提供者 (可选, 默认为 local: 执行本地搜索; leansearch.net 暂不可用)
-LEAN_LLM_SEARCH_PROVIDER=""
 ```
-**重要**: 确保 `LEAN_LLM_PYTHON` 指向的是你刚刚创建的虚拟环境中的 Python 解释器，否则 Lean 将无法找到已安装的 `openai` 库。
-
-### 5. 集成到你的 Lean 项目
-
-要在一个已有的 Lean 4 项目中使用此工具，你需要将其添加为 `lakefile.lean` 中的一个本地依赖。
-
-假设你的项目结构如下：
-```
-MyLeanProject/
-├── lakefile.lean
-├── MyLeanProject.lean
-└── lean-toolchain
-LLMTools/  <-- 这个AI工具的文件夹
-├── Core.lean
-├── Search.lean
-├── Tactic.lean
-├── llm_service.py
-└── ...
-```
-
-在 `MyLeanProject/lakefile.lean` 中添加：
-```lean
-import Lake
-open Lake DSL
-
-package «my-lean-project» where
-  -- ... other settings
-
-require «llm-tools» from "../LLMTools" -- [!code focus]
-
-@[default_target]
-lean_lib «MyLeanProject» where
-  -- ...
-```
-现在，在你的 Lean 文件中，你可以导入并使用这些AI策略了。
+**重要**: 确保 `LEAN_LLM_PYTHON` 指向的是你在**当前项目**中创建的虚拟环境中的 Python 解释器，否则 Lean 将无法找到已安装的 `openai` 库。
 
 ## 🚀 使用方法
 
