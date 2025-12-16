@@ -1,5 +1,5 @@
 import Lean
-import LLMTools.Core 
+import LLMTools.Core
 
 open Lean Meta Elab Tactic
 
@@ -21,13 +21,12 @@ def findTheoremsLocal (keywords : String) : TacticM String := do
   let keywordList := (keywords.splitOn " " |>.filter (· != "") |>.map String.toLower).eraseDups
 
   let matchesArray := env.constants.fold (init := #[]) fun acc name info =>
-    if info.isUnsafe || Lean.Name.isInternal name then acc else
-      let nStr := name.toString.toLower
-      let score := keywordList.foldl (fun count k =>
-        let occurrences := (nStr.splitOn k).length - 1
-        if occurrences > 0 then count + 100 + (occurrences - 1) else count
-      ) 0
-      if score > 0 then acc.push (name, info, score) else acc
+      if info.isUnsafe || Lean.Name.isInternal name then acc else
+        let nStr := name.toString.toLower
+        let score := keywordList.foldl (fun count k =>
+          if nStr.toSlice.contains k then count + 1 else count
+        ) 0
+        if score > 0 then acc.push (name, info, score) else acc
 
   let sortedMatches := matchesArray.qsort fun (n1, _, s1) (n2, _, s2) =>
     if s1 != s2 then s1 > s2
@@ -62,12 +61,12 @@ structure SearchResponse where
 unsafe def findTheoremsWeb (keywords : String) : TacticM String := do
   logInfo "[Search] Using leansearch.net provider..."
   let req : SearchRequest := { query := keywords }
-  
+
   let res : SearchResponse ← runIO (callPythonService req #["--task", "search"])
 
-  if res.success then 
+  if res.success then
     return res.results
-  else 
+  else
     throwError s!"[Web Search Error] {res.message}"
 
 unsafe def findTheorems (keywords : String) : TacticM String := do

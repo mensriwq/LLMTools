@@ -4,7 +4,9 @@ import os
 import re
 import textwrap
 import argparse
+import time
 from urllib.parse import urlencode
+from datetime import datetime 
 
 try:
     from openai import OpenAI
@@ -20,6 +22,18 @@ try:
     from bs4 import BeautifulSoup
 except ImportError:
     BeautifulSoup = None
+
+LOG_FILE = "llm_agent.log"
+
+def log_message(msg):
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    formatted_msg = f"[{timestamp}] {msg}"
+    
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(formatted_msg + "\n")
+    except Exception:
+        pass
 
 class PromptManager:
     def __init__(self, prompts_dir="prompts"):
@@ -65,6 +79,10 @@ class CustomOpenAIProvider:
     def generate(self, system_prompt, user_prompt):
         if not self.client: return "OpenAI client not initialized (Check LLM_API_KEY)."
         try:
+            log_message(f"🧠 Sending request to LLM ({self.model_name})...")
+            log_message(f"\n\nPrompt: {user_prompt}\n\n")
+            start_time = time.time()
+
             response = self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
@@ -73,9 +91,34 @@ class CustomOpenAIProvider:
                 ],
                 temperature=0.2
             )
+            duration = time.time() - start_time
+            log_message(f"✅ LLM responded in {duration:.2f}s")
             return response.choices[0].message.content
         except Exception as e:
+            log_message(f"❌ LLM Error: {e}")
             return f"Error calling LLM: {e}"
+
+class MockLLMProvider:
+    def __init__(self):
+        default_response = textwrap.dedent("""
+            <think>
+            Mocking a response to test Lean side verification.
+            </think>
+           
+            ```lean
+            have h : 1=1 := rfl
+            ```
+            
+        """)
+        self.response = os.getenv("LLM_MOCK_RESPONSE", default_response)
+
+    def generate(self, system_prompt, user_prompt):
+        try:
+            log_message(f"🤖 [MOCK] Returning fixed response: {self.response[:20]}...")
+        except:
+            pass
+            
+        return self.response
 
 # 注: 该服务不可用
 def perform_lean_search(query: str):
@@ -166,12 +209,15 @@ def handle_llm_request(req):
         "thm_decl": req.get("fullThm") or "Theorem not available.",
         "hint": req.get("hint") or "None",
         "prev_tactic": req.get("prevTactic") or "None",
-        "error_msg": req.get("errorMsg") or "None",
+        "error_msg": re.sub(r"\S+\.lean:\d+:\d+:\s*", "", req.get("errorMsg") or "None"),
         "diagnosis": req.get("diagnosisInfo") or "None",
         "search_results": req.get("searchResults") or "No search results."
     }
 
     req_type = req.get("requestType", "init_next")
+
+    log_message("-" * 40)
+    log_message(f"📥 New Request: {req_type}")
     
     if "diagnose" in req_type:
         system_tpl_name = "system_diagnose"
@@ -188,6 +234,8 @@ def handle_llm_request(req):
     provider_name = os.getenv("LLM_PROVIDER", "openai").lower()
     if provider_name == "openai":
         provider = CustomOpenAIProvider()
+    elif provider_name == "mock":
+        provider = MockLLMProvider()
     else:
         print(json.dumps({"success": False, "message": f"Unknown LLM_PROVIDER: {provider_name}"}))
         return
@@ -211,10 +259,12 @@ def handle_llm_request(req):
         
         response_data["analysis"] = analysis_match.group(1).strip() if analysis_match else raw_response
         raw_query = search_match.group(1).strip() if search_match else "NONE"
-        
+
+        log_message(f"🩺 Diagnosis: {response_data['analysis']}")
         if raw_query != "NONE":
             raw_query = raw_query.replace(",", " ")
             raw_query = re.sub(r'\s+', ' ', raw_query)
+            log_message(f"🔑 Suggest Search: {raw_query}")
             
         response_data["searchQuery"] = raw_query
         response_data["tactic"] = "skip" 
@@ -233,10 +283,16 @@ def handle_llm_request(req):
                 final_tactic_code = ""
             # 特殊处理, 此时已经完全对齐. TypeGen 不会关闭目标
             if "type" in req_type and final_tactic_code:
+                pass
                 final_tactic_code = final_tactic_code + "\nsorry"
             response_data["tactic"] = final_tactic_code
         else:
             response_data["tactic"] = clean_response.replace("`", "")
+
+        if response_data["tactic"]:
+            log_message(f"💡 Generated Tactic:\n{textwrap.indent(response_data['tactic'], '   ')}")
+        else:
+             log_message("⚠️ No tactic generated.")
 
     print(json.dumps(response_data))
 

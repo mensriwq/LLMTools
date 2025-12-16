@@ -32,18 +32,19 @@ def runStrictCheck (tacticStx : Syntax) : TacticM Unit := do
       evalTactic tacticStx
       Term.synthesizeSyntheticMVarsNoPostponing
       let newCoreState ← getThe Core.State
-      let msgs := newCoreState.messages
-      let hasError := msgs.toList.any fun m =>
-        match m.severity with | MessageSeverity.error => true | _ => false
-      if hasError then
-        let errorMsgs := msgs.toList.filter fun m =>
-          match m.severity with | MessageSeverity.error => true | _ => false
-        let errorStrs ← errorMsgs.mapM fun m => Core.liftIOCore m.toString
-        throwError s!"\n".intercalate errorStrs
+      let msgs := newCoreState.messages.toList
+      let mut collectedErrors : List String := []
+      for m in msgs do
+        let msgStr ← Core.liftIOCore m.toString
+        if m.severity == MessageSeverity.error then
+          if !(msgStr.toSlice.contains "unsolved goals" || msgStr.toSlice.contains "No goals to be solved") then
+            collectedErrors := collectedErrors.concat msgStr
+      if !collectedErrors.isEmpty then
+        throwError s!"\n".intercalate collectedErrors
     finally
       modifyThe Core.State fun s => { s with messages := oldMsgs }
 
-unsafe def llmGeneralLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (req : LlmRequest) (stx : Syntax) : TacticM Unit := do
+unsafe def llmFuelLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (req : LlmRequest) (stx : Syntax) : TacticM Unit := do
   if fuel == 0 then
     throwError "[LLM] Max retries exceeded."
 
@@ -65,7 +66,7 @@ unsafe def llmGeneralLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (r
       searchResults := some searchResults,
       diagnosisInfo := some analysis
     }
-    llmGeneralLoop fuel wType .Fix fixReq stx
+    llmFuelLoop fuel wType .Fix fixReq stx
     return
 
   let tacticCode := res.tactic
@@ -75,7 +76,7 @@ unsafe def llmGeneralLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (r
   | Except.error e =>
     logWarning s!"{logPrefix}{e} Syntax error. Retrying..."
     let newReq := { req with prevTactic := some tacticCode, errorMsg := some s!"Syntax Error: {e}" }
-    llmGeneralLoop (fuel - 1) wType .Fix newReq stx
+    llmFuelLoop (fuel - 1) wType .Fix newReq stx
 
   | Except.ok tacticStx =>
     let checkRes ← (try
@@ -97,7 +98,7 @@ unsafe def llmGeneralLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (r
         prevTactic := some tacticCode,
         errorMsg := some msg
       }
-      llmGeneralLoop (fuel - 1) wType .Diagnose diagReq stx
+      llmFuelLoop (fuel - 1) wType .Diagnose diagReq stx
 
 unsafe def runLlmTactic (stx : Syntax) (wType : WorkType) (num? : Option (TSyntax `num)) (str? : Option (TSyntax `str)) : TacticM Unit := do
   let fuel := match num? with
@@ -123,7 +124,7 @@ unsafe def runLlmTactic (stx : Syntax) (wType : WorkType) (num? : Option (TSynta
     diagnosisInfo := none
   }
 
-  llmGeneralLoop fuel wType .Init initialReq stx
+  llmFuelLoop fuel wType .Init initialReq stx
 
 -- Syntax: llm_next <fuel?> <hint?>
 syntax (name := llm_next) "llm_next" (ppSpace num)? (ppSpace str)? : tactic

@@ -19,6 +19,6 @@ We are fixing a failed proof step.
    {goal_state}
 
 **INSTRUCTIONS:**
-1. Use <think> tags to think.
+1. Use <think> tags to write your analysis.
 2. Plan the fix.
 3. Output the CORRECTED code inside a ```lean``` block.
