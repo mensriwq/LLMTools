@@ -229,7 +229,6 @@ def handle_llm_request(req):
         else:
             raise ValueError("Unknown prompt format")
     user_tpl_name = req_type
-
     pm = PromptManager()
     provider_name = os.getenv("LLM_PROVIDER", "openai").lower()
     if provider_name == "openai":

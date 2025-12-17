@@ -7,6 +7,7 @@ inductive WorkType where
   | Framework
   | TypeGen
   | Revise
+  | Fallback
   deriving Inhabited, BEq, Repr
 
 instance : ToString WorkType where
@@ -15,6 +16,7 @@ instance : ToString WorkType where
     | .Framework => "framework"
     | .TypeGen   => "type"
     | .Revise    => "revise"
+    | .Fallback  => "fallback"
 
 inductive WorkPhase where
   | Init
@@ -33,6 +35,7 @@ def WorkType.defaultFuel : WorkType → Nat
   | .Framework => 3
   | .TypeGen   => 4
   | .Revise    => 5
+  | .Fallback  => 3
 
 structure LlmRequest where
   requestType   : String
@@ -56,7 +59,7 @@ structure LlmResponse where
 def getRequestStr (wType : WorkType) (phase : WorkPhase) : String :=
   match phase with
   | .Diagnose => "diagnose"
-  | _ => s!"{phase}_{wType}" 
+  | _ => s!"{phase}_{wType}"
 
 def getLogPrefix (wType : WorkType) : String :=
   s!"[llm_{wType}]"
@@ -77,7 +80,7 @@ def findPythonScriptPath : IO String := do
     return relativePath.toString
 
   let lakePackagesDir : FilePath := ".lake" / "packages"
-  
+
   if ← lakePackagesDir.pathExists then
     let entries ← System.FilePath.readDir lakePackagesDir
     for entry in entries do
@@ -87,7 +90,7 @@ def findPythonScriptPath : IO String := do
         if ← candidate.pathExists then
           return candidate.toString
 
-  throw <| IO.userError <| 
+  throw <| IO.userError <|
     s!"[LLMTools] Could not locate 'llm_service.py'.\n" ++
     s!"Searched in:\n" ++
     s!"  1. $LEAN_LLM_SCRIPT_PATH\n" ++
@@ -101,7 +104,7 @@ def callPythonService {α β : Type} [ToJson α] [FromJson β] (req : α) (extra
 
   let pythonCmd ← IO.getEnv "LEAN_LLM_PYTHON"
   let args := #[scriptPath] ++ extraArgs
-  
+
   let child ← IO.Process.spawn {
     cmd := pythonCmd.getD "python3"
     args := args

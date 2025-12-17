@@ -46,7 +46,22 @@ def runStrictCheck (tacticStx : Syntax) : TacticM Unit := do
 
 unsafe def llmFuelLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (req : LlmRequest) (stx : Syntax) : TacticM Unit := do
   if fuel == 0 then
-    throwError "[LLM] Max retries exceeded."
+    match wType with
+    | .Fallback =>
+      throwError "[LLM] Fallback failed. Unable to salvage the proof."
+    | _ =>
+      logWarning s!"{getLogPrefix wType} Fuel exhausted. Switching to FALLBACK mode..."
+
+      let prevCode := req.prevTactic.getD "sorry"
+      let prevErr := req.errorMsg.getD "Timeout"
+
+      let fallbackReq := { req with
+        requestType := "fallback",
+        prevTactic := some prevCode,
+        errorMsg := some prevErr
+      }
+      llmFuelLoop (WorkType.defaultFuel .Fallback) .Fallback .Fix fallbackReq stx
+      return
 
   let currentReq := { req with requestType := getRequestStr wType phase }
   let logPrefix := getLogPrefix wType
