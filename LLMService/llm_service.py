@@ -5,6 +5,7 @@ import re
 import textwrap
 import argparse
 import time
+import hashlib
 from urllib.parse import urlencode
 from datetime import datetime 
 
@@ -24,6 +25,7 @@ except ImportError:
     BeautifulSoup = None
 
 LOG_FILE = "llm_agent.log"
+CACHE_FILE = "llm_cache.json"
 
 def log_message(msg):
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -34,6 +36,51 @@ def log_message(msg):
             f.write(formatted_msg + "\n")
     except Exception:
         pass
+
+class CacheManager:
+    def __init__(self):
+        self.cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), CACHE_FILE)
+        self.cache = self._load_cache()
+
+    def _load_cache(self):
+        if not os.path.exists(self.cache_file):
+            return {}
+        try:
+            with open(self.cache_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def _save_cache(self):
+        try:
+            with open(self.cache_file, "w", encoding="utf-8") as f:
+                json.dump(self.cache, f, indent=2)
+        except Exception as e:
+            log_message(f"⚠️ Failed to save cache: {e}")
+
+    def _generate_key(self, goal, hint, work_type):
+
+        g = (goal or "").strip()
+        h = (hint or "None").strip()
+        w = (work_type or "").strip()
+        raw_key = f"{g}||{h}||{w}"
+        return hashlib.md5(raw_key.encode('utf-8')).hexdigest()
+
+    def get(self, goal, hint, work_type):
+        key = self._generate_key(goal, hint, work_type)
+        if key in self.cache:
+            log_message(f"⚡ Cache Hit for [{work_type}]")
+            return self.cache[key]
+        return None
+
+    def set(self, goal, hint, work_type, code):
+        key = self._generate_key(goal, hint, work_type)
+        if "```lean" not in code:
+            code = f"```lean\n{code}\n```"
+        
+        self.cache[key] = code
+        self._save_cache()
+        log_message(f"💾 Cached success for [{work_type}]")
 
 class PromptManager:
     def __init__(self, prompts_dir="prompts"):
@@ -204,6 +251,34 @@ def perform_lean_search(query: str):
     }
 
 def handle_llm_request(req):
+    req_type = req.get("requestType", "init_next")
+    if req_type == "report_success":
+        goal = req.get("goalState")
+        hint = req.get("hint")
+        work_type = req.get("diagnosisInfo", "unknown") 
+        code = req.get("prevTactic", "")
+        cm = CacheManager()
+        cm.set(goal, hint, work_type, code)
+        print(json.dumps({"success": True, "message": "Cached successfully", "tactic": ""}))
+        return
+
+    if req_type.startswith("init_"):
+        parts = req_type.split('_', 1)
+        work_type_suffix = parts[1] if len(parts) > 1 else req_type
+        
+        cm = CacheManager()
+        cached_code = cm.get(req.get("goalState"), req.get("hint"), work_type_suffix)
+        
+        if cached_code:
+            print(json.dumps({
+                "tactic": cached_code,
+                "searchQuery": None,
+                "analysis": None,
+                "success": True,
+                "message": "Returned from Cache"
+            }))
+            return
+
     context = {
         "goal_state": req.get("goalState") or "No goal state.",
         "thm_decl": req.get("fullThm") or "Theorem not available.",
@@ -213,8 +288,6 @@ def handle_llm_request(req):
         "diagnosis": req.get("diagnosisInfo") or "None",
         "search_results": req.get("searchResults") or "No search results."
     }
-
-    req_type = req.get("requestType", "init_next")
 
     log_message("-" * 40)
     log_message(f"📥 New Request: {req_type}")
@@ -227,7 +300,7 @@ def handle_llm_request(req):
             suffix = parts[1]
             system_tpl_name = f"system_{suffix}"
         else:
-            raise ValueError("Unknown prompt format")
+            system_tpl_name = "system_next" 
     user_tpl_name = req_type
     pm = PromptManager()
     provider_name = os.getenv("LLM_PROVIDER", "openai").lower()
@@ -280,16 +353,15 @@ def handle_llm_request(req):
                 final_tactic_code = textwrap.dedent(code_without_blank_lines)
             else:
                 final_tactic_code = ""
-            # 特殊处理, 此时已经完全对齐. TypeGen 不会关闭目标
             if "type" in req_type and final_tactic_code:
                 pass
-                final_tactic_code = final_tactic_code + "\nsorry"
+                # final_tactic_code = final_tactic_code + "\nsorry"
             response_data["tactic"] = final_tactic_code
         else:
             response_data["tactic"] = clean_response.replace("`", "")
 
         if response_data["tactic"]:
-            log_message(f"💡 Generated Tactic:\n{textwrap.indent(response_data['tactic'], '   ')}")
+            log_message(f"💡 Generated Tactic (Chars: {len(response_data['tactic'])})")
         else:
              log_message("⚠️ No tactic generated.")
 

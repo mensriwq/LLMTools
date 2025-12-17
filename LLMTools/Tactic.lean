@@ -85,7 +85,11 @@ unsafe def llmFuelLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (req 
     return
 
   let tacticCode := res.tactic
-  logInfo s!"{logPrefix} Trying:\n{tacticCode}"
+
+  if res.message == "Returned from Cache" then
+    logInfo s!"{logPrefix} ⚡ Using cached suggestion."
+  else
+    logInfo s!"{logPrefix} Trying:\n{tacticCode}"
 
   match Parser.runParserCategory (← getEnv) `tactic ("{\n" ++ tacticCode ++ "\n}") with
   | Except.error e =>
@@ -106,6 +110,14 @@ unsafe def llmFuelLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (req 
       TryThis.addSuggestion stx { suggestion := tacticSyntax }
       logInfo s!"{logPrefix} Verification Passed!"
 
+      let successReq := { req with
+        requestType := "report_success",
+        prevTactic := some tacticCode,
+        diagnosisInfo := some (toString wType)
+      }
+
+      let _ ← runIO (callLlmService successReq)
+
     | Except.error e =>
       let msg ← e.toMessageData.toString
       logWarning s!"{logPrefix} Logic Check Failed: {msg}"
@@ -116,6 +128,8 @@ unsafe def llmFuelLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (req 
       llmFuelLoop (fuel - 1) wType .Diagnose diagReq stx
 
 unsafe def runLlmTactic (stx : Syntax) (wType : WorkType) (num? : Option (TSyntax `num)) (str? : Option (TSyntax `str)) : TacticM Unit := do
+  runIO (IO.sleep 500)
+
   let fuel := match num? with
     | some nStx => nStx.getNat
     | none      => wType.defaultFuel
