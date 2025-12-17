@@ -11,6 +11,7 @@ TASK:
    - If the error is about a missing identifier or theorem, verify the name.
    - If the error is about arguments, search the theorem to check its signature (arguments name/type, implicit/explicit arguments, sometimes use @).
    - If it's a syntax error or logical error you can fix without search, use "NONE".
+   - If tactics like `omega`, `linarith`, or `aesop` timeout, consider suggesting `clear` to remove unused hypotheses, or use "NONE" for search.
 
 OUTPUT FORMAT:
 ANALYSIS: <Short explanation of the error>

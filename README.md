@@ -68,7 +68,7 @@
 [[require]]
 name = "llm-tools"
 git = "https://github.com/mensriwq/LLMTools.git"
-rev = "v0.2.0" # 或者一个更新的版本标签, v0.2.0及以上可以工作
+rev = "v0.4.2" # 或者一个更新的版本标签, v0.2.0及以上可以工作
 ```
 
 **对于使用 `lakefile.lean` 的项目：**
@@ -80,7 +80,7 @@ open Lake DSL
 package «my-lean-project» where
   -- ... 其他配置
 
-require «llm-tools» from git "https://github.com/mensriwq/LLMTools.git" @ "v0.2.0"
+require «llm-tools» from git "https://github.com/mensriwq/LLMTools.git" @ "v0.4.2"
 ```
 
 **添加依赖后，请在你的项目终端中运行 `lake update` 来下载并配置依赖：**
