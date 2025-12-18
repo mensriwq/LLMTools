@@ -1,0 +1,46 @@
+[Full Theorem]:
+{thm_decl}
+
+[Current Goal]:
+{goal_state}
+
+[User Hint]:
+{hint}
+
+TASK:
+Analyze the proof structure based on the following definitions:
+
+1. **CHAIN (Linear)**:
+   - Use this if the proof is a sequence of causal steps (A leads to B, B leads to Goal).
+   - Even if steps are hard, if they are sequential, it is CHAIN.
+   - The plan should be a list of **Intermediate Lemmas/Facts** that need to be proven (e.g., "Prove x > 0", "Show f is continuous").
+
+2. **COMPOUND (Branching)**:
+   - Use this ONLY if the proof requires splitting into branches immediately (e.g., Induction, Cases, dividing into "left" and "right").
+   - The plan is just a brief outline.
+
+OUTPUT FORMAT:
+Output a JSON object in a json code block.
+
+Example 1 (Chain):
+Your analysis for this problem here.
+```json
+{{
+  "type": "CHAIN",
+  "plan": [
+    "Prove that x is positive",
+    "Show that y is bounded by x"
+  ]
+}}
+```
+
+Example 2 (Compound):
+Your analysis for this problem here.
+```json
+{{
+  "type": "COMPOUND",
+  "plan": [
+    "Apply induction on n, we need to prove H(n)..."
+  ]
+}}
+```

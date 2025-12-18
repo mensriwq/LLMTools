@@ -32,153 +32,154 @@ def runStrictCheck (tacticStx : Syntax) : TacticM Unit := do
     finally
       modifyThe Core.State fun s => { s with messages := oldMsgs }
 
-unsafe def llmFuelLoop (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (req : LlmRequest) (stx : Syntax) : TacticM Unit := do
+unsafe def generateLlmTactic (fuel : Nat) (wType : WorkType) (phase : WorkPhase) (req : LlmRequest) (refStx : Syntax)
+                             : TacticM (Option (String × TSyntax `tactic)) := do
   if fuel == 0 then
     match wType with
     | .Fallback =>
-      throwError "[LLM] Fallback failed. Unable to salvage the proof."
+      logError "[LLM] Fallback failed. Unable to salvage the proof."
+      return none
     | _ =>
       logWarning s!"{getLogPrefix wType} Fuel exhausted. Switching to FALLBACK mode..."
-
       let prevCode := req.prevTactic.getD "sorry"
       let prevErr := req.errorMsg.getD "Timeout"
-
       let fallbackReq := { req with
         requestType := "fallback",
         prevTactic := some prevCode,
         errorMsg := some prevErr
       }
-      llmFuelLoop (WorkType.defaultFuel .Fallback) .Fallback .Fix fallbackReq stx
-      return
+      generateLlmTactic (WorkType.defaultFuel .Fallback) .Fallback .Fix fallbackReq refStx
 
-  let currentReq := { req with requestType := getRequestStr wType phase }
-  let logPrefix := getLogPrefix wType
-
-  let res ← runIO (callLlmService currentReq)
-  if ¬res.success then throwError s!"Service Error: {res.message}"
-
-  if phase == .Diagnose then
-    let query := res.searchQuery.getD "NONE"
-    let analysis := res.analysis.getD "No analysis provided."
-    let searchResults ← findTheorems query
-
-    logInfo s!"[Diagnosis] Analysis: {analysis}"
-    if query != "NONE" then logInfo s!"[Search] Found:\n{searchResults}"
-
-    let fixReq := { req with
-      searchResults := some searchResults,
-      diagnosisInfo := some analysis
-    }
-    llmFuelLoop fuel wType .Fix fixReq stx
-    return
-
-  let tacticCode := res.tactic
-
-  if res.message == "Returned from Cache" then
-    logInfo s!"{logPrefix} ⚡ Using cached suggestion."
   else
-    logInfo s!"{logPrefix} Trying:\n{tacticCode}"
+    let currentReq := { req with requestType := getRequestStr wType phase }
+    let logPrefix := getLogPrefix wType
 
-  match Parser.runParserCategory (← getEnv) `tactic ("{\n" ++ tacticCode ++ "\n}") with
-  | Except.error e =>
-    logWarning s!"{logPrefix}{e} Syntax error. Retrying..."
-    let newReq := { req with prevTactic := some tacticCode, errorMsg := some s!"Syntax Error: {e}" }
-    llmFuelLoop (fuel - 1) wType .Fix newReq stx
+    let res ← runIO (callLlmService currentReq)
+    if ¬res.success then
+      throwError s!"Service Error: {res.message}"
 
-  | Except.ok tacticStx =>
-    let checkRes ← (try
-        runStrictCheck tacticStx
-        pure (Except.ok ())
-      catch e =>
-        pure (Except.error e))
+    if phase == .Diagnose then
+      let query := res.searchQuery.getD "NONE"
+      let analysis := res.analysis.getD "No analysis provided."
+      let searchResults ← findTheorems query
 
-    match checkRes with
-    | Except.ok _ =>
-      let tacticSyntax : TSyntax `tactic := ⟨tacticStx⟩
-      TryThis.addSuggestion stx { suggestion := tacticSyntax }
-      logInfo s!"{logPrefix} Verification Passed!"
+      logInfo s!"[Diagnosis] Analysis: {analysis}"
+      if query != "NONE" then logInfo s!"[Search] Found:\n{searchResults}"
 
-      let successReq := { req with
-        requestType := "report_success",
-        prevTactic := some tacticCode,
-        diagnosisInfo := some (toString wType)
+      let fixReq := { req with
+        searchResults := some searchResults,
+        diagnosisInfo := some analysis
       }
+      generateLlmTactic fuel wType .Fix fixReq refStx
 
-      let _ ← runIO (callLlmService successReq)
+    else
+      let tacticCode := res.tactic
 
-    | Except.error e =>
-      let msg ← e.toMessageData.toString
-      logWarning s!"{logPrefix} Logic Check Failed: {msg}"
-      let diagReq := { req with
-        prevTactic := some tacticCode,
-        errorMsg := some msg
-      }
-      llmFuelLoop (fuel - 1) wType .Diagnose diagReq stx
+      if res.message == "Returned from Cache" then
+        logInfo s!"{logPrefix} ⚡ Using cached suggestion."
+      else
+        logInfo s!"{logPrefix} Trying:\n{tacticCode}"
 
-unsafe def runLlmTactic (stx : Syntax) (wType : WorkType) (num? : Option (TSyntax `num)) (str? : Option (TSyntax `str)) : TacticM Unit := do
+      match Parser.runParserCategory (← getEnv) `tactic ("{\n" ++ tacticCode ++ "\n}") with
+      | Except.error e =>
+        logWarning s!"{logPrefix}{e} Syntax error. Retrying..."
+        let newReq := { req with prevTactic := some tacticCode, errorMsg := some s!"Syntax Error: {e}" }
+        generateLlmTactic (fuel - 1) wType .Fix newReq refStx
+
+      | Except.ok tacticStx =>
+        let checkRes ← (try
+            runStrictCheck tacticStx
+            pure (Except.ok ())
+          catch e =>
+            pure (Except.error e))
+
+        match checkRes with
+        | Except.ok _ =>
+          let tacticSyntax : TSyntax `tactic := ⟨tacticStx⟩
+
+          let successReq := { req with
+            requestType := "report_success",
+            prevTactic := some tacticCode,
+            diagnosisInfo := some (toString wType)
+          }
+          let _ ← runIO (callLlmService successReq)
+
+          return some (tacticCode, tacticSyntax)
+
+        | Except.error e =>
+          let msg ← e.toMessageData.toString
+          logWarning s!"{logPrefix} Logic Check Failed: {msg}"
+          let diagReq := { req with
+            prevTactic := some tacticCode,
+            errorMsg := some msg
+          }
+          generateLlmTactic (fuel - 1) wType .Diagnose diagReq refStx
+
+unsafe def runInteractiveLlm (stx : Syntax) (wType : WorkType) (num? : Option (TSyntax `num)) (str? : Option (TSyntax `str)) : TacticM Unit := do
   runIO (IO.sleep 500)
 
-  let fuel := match num? with
-    | some nStx => nStx.getNat
-    | none      => wType.defaultFuel
-
-  let hint? := match str? with
-    | some sStx => some sStx.getString
-    | none      => none
-
+  let fuel := match num? with | some n => n.getNat | none => wType.defaultFuel
+  let hint? := match str? with | some s => some s.getString | none => none
   let mainGoal ← getMainGoal
   let goalState ← mainGoal.withContext do return (← ppGoal mainGoal).pretty
   let ctx ← readThe Core.Context
-  let source := ctx.fileMap.source
-  let pos := stx.getPos?.map (·.byteIdx)
-
-  let initialReq : LlmRequest := {
+  let req : LlmRequest := {
     requestType := "",
     goalState := goalState,
-    source := source,
-    pos := pos,
+    source := ctx.fileMap.source,
+    pos := stx.getPos?.map (·.byteIdx),
     hint := hint?,
-    prevTactic := none,
-    errorMsg := none,
-    searchResults := none,
-    diagnosisInfo := none
+    prevTactic := none, errorMsg := none, searchResults := none, diagnosisInfo := none
   }
 
-  llmFuelLoop fuel wType .Init initialReq stx
+  match ← generateLlmTactic fuel wType .Init req stx with
+  | some (_, tacticStx) =>
+    TryThis.addSuggestion stx tacticStx
+    logInfo s!"{getLogPrefix wType} Verification Passed!"
+  | none =>
+    logError "LLM failed to generate valid code."
 
--- Syntax: llm_next <fuel?> <hint?>
+unsafe def runChainStep (stepDesc : String) (refStx : Syntax) : TacticM String := do
+  let mainGoal ← getMainGoal
+  let goalState ← mainGoal.withContext do return (← ppGoal mainGoal).pretty
+  let ctx ← readThe Core.Context
+
+  let req : LlmRequest := {
+    requestType := "",
+    goalState := goalState,
+    source := ctx.fileMap.source,
+    pos := refStx.getPos?.map (·.byteIdx),
+    hint := some s!"[Chain Step]: {stepDesc}",
+    prevTactic := none, errorMsg := none, searchResults := none, diagnosisInfo := none
+  }
+
+  match ← generateLlmTactic (WorkType.TypeGen).defaultFuel .TypeGen .Init req refStx with
+  | some (code, stx) =>
+    evalTactic stx
+    return code
+  | none =>
+    throwError s!"Failed to generate chain step: {stepDesc}"
+
 syntax (name := llm_next) "llm_next" (ppSpace num)? (ppSpace str)? : tactic
-
 @[tactic llm_next] unsafe def evalLlmNext : Tactic := fun stx => do
   match stx with
-  | `(tactic| llm_next $[$n:num]? $[$s:str]?) =>
-    runLlmTactic stx .Next n s
+  | `(tactic| llm_next $[$n:num]? $[$s:str]?) => runInteractiveLlm stx .Next n s
   | _ => throwUnsupportedSyntax
 
--- Syntax: llm_framework <fuel?> <hint?>
 syntax (name := llm_framework) "llm_framework" (ppSpace num)? (ppSpace str)? : tactic
-
 @[tactic llm_framework] unsafe def evalLlmframework : Tactic := fun stx => do
   match stx with
-  | `(tactic| llm_framework $[$n:num]? $[$s:str]?) =>
-    runLlmTactic stx .Framework n s
+  | `(tactic| llm_framework $[$n:num]? $[$s:str]?) => runInteractiveLlm stx .Framework n s
   | _ => throwUnsupportedSyntax
 
-
--- Syntax: llm_type <fuel?> <hint?>
 syntax (name := llm_type) "llm_type" (ppSpace num)? (ppSpace str)? : tactic
-
 @[tactic llm_type] unsafe def evalLlmType : Tactic := fun stx => do
   match stx with
-  | `(tactic| llm_type $[$n:num]? $[$s:str]?) =>
-    runLlmTactic stx .TypeGen n s
+  | `(tactic| llm_type $[$n:num]? $[$s:str]?) => runInteractiveLlm stx .TypeGen n s
   | _ => throwUnsupportedSyntax
 
--- Syntax: llm_revise <fuel?> <old_code>
 syntax (name := llm_revise) "llm_revise" (ppSpace num)? (ppSpace str) : tactic
-
 @[tactic llm_revise] unsafe def evalLlmRevise : Tactic := fun stx => do
   match stx with
-  | `(tactic| llm_revise $[$n:num]? $s) =>
-    runLlmTactic stx .Revise n s
+  | `(tactic| llm_revise $[$n:num]? $s) => runInteractiveLlm stx .Revise n (some s)
   | _ => throwUnsupportedSyntax

@@ -59,7 +59,6 @@ class CacheManager:
             log_message(f"⚠️ Failed to save cache: {e}")
 
     def _generate_key(self, goal, hint, work_type):
-
         g = (goal or "").strip()
         h = (hint or "None").strip()
         w = (work_type or "").strip()
@@ -167,6 +166,37 @@ class MockLLMProvider:
             
         return self.response
 
+def classify_error(error_msg):
+    msg = error_msg.lower()
+    
+    # 1. Missing / Hallucination
+    if any(k in msg for k in [
+        "unknown identifier", "unknown constant", "unknown declaration",
+        "failed to synthesize", "instance problem is stuck", "hypothesis", "not found"
+    ]):
+        return "missing"
+
+    # 2. Type / Syntax
+    if any(k in msg for k in [
+        "type mismatch", "application type mismatch", "expected type", 
+        "function expected", "too many arguments", "invalid", "notation",
+        "not a definitional equality"
+    ]):
+        return "type"
+
+    # 3. Tactic Failure
+    # "no goals", "unsolved goals"
+    if any(k in msg for k in [
+        "tactic", "failed", "no applicable"
+    ]):
+        return "failure"
+    
+    # 4. Resource
+    if any(k in msg for k in ["heartbeats", "recursion", "timeout"]):
+        return "resource"
+
+    return "general"
+
 def extract_context_from_source(source, pos):
     if not source or pos is None:
         return None, None
@@ -271,8 +301,8 @@ def extract_context_from_source(source, pos):
 
     return theorem_decl, implicit_hint
 
-# 注: 该服务不可用
 def perform_lean_search(query: str):
+    raise NotImplementedError("Won't work.")
     if not requests or not BeautifulSoup:
         return {
             "success": False,
@@ -383,7 +413,7 @@ def handle_llm_request(req):
             }))
             return
 
-    thm_decl, implicit_hint = extract_context_from_source(req.get("source") or "", req.get("pos") or 0)
+    thm_decl, implicit_hint = extract_context_from_source(req.get("source"), req.get("pos"))
     context = {
         "goal_state": req.get("goalState") or "No goal state.",
         "thm_decl": thm_decl or "Unknown Theorem, see goal.",
@@ -447,28 +477,53 @@ def handle_llm_request(req):
         response_data["tactic"] = "skip" 
     else:
         clean_response = re.sub(r'<think>.*?</think>', '', raw_response, flags=re.DOTALL)
-        code_match = re.search(r'```(?:lean)?(.*?)```', clean_response, re.DOTALL)
-        if code_match:
-            raw_tactic_block = code_match.group(1)
-            lines = raw_tactic_block.split('\n')
-            while lines and not lines[0].strip(): lines.pop(0)
-            while lines and not lines[-1].strip(): lines.pop()
-            code_without_blank_lines = "\n".join(lines)
-            if code_without_blank_lines:
-                final_tactic_code = textwrap.dedent(code_without_blank_lines)
+        if req_type == "init_auto":
+            try:
+                clean_json = re.sub(r'```json\s*|\s*```', '', clean_response).strip()
+                start = clean_json.find('{')
+                end = clean_json.rfind('}') + 1
+                if start != -1 and end != 0:
+                    clean_json = clean_json[start:end]
+                    
+                plan_data = json.loads(clean_json)
+                
+                print(json.dumps({
+                    "tactic": "", 
+                    "searchQuery": None,
+                    "analysis": json.dumps(plan_data),
+                    "success": True, 
+                    "message": "Plan Generated"
+                }))
+                return
+            except Exception as e:
+                log_message(f"❌ JSON Parse Error in Auto: {e}")
+                print(json.dumps({
+                    "tactic": "",
+                    "analysis": json.dumps({"type": "COMPOUND", "plan": ["Fallback"]}),
+                    "success": True,
+                    "message": "Fallback to Compound"
+                }))
+                return
+        else:
+            code_match = re.search(r'```(?:lean)?(.*?)```', clean_response, re.DOTALL)
+            if code_match:
+                raw_tactic_block = code_match.group(1)
+                lines = raw_tactic_block.split('\n')
+                while lines and not lines[0].strip(): lines.pop(0)
+                while lines and not lines[-1].strip(): lines.pop()
+                code_without_blank_lines = "\n".join(lines)
+                if code_without_blank_lines:
+                    final_tactic_code = textwrap.dedent(code_without_blank_lines)
+                else:
+                    final_tactic_code = ""
+                response_data["tactic"] = final_tactic_code
             else:
-                final_tactic_code = ""
-            if "type" in req_type and final_tactic_code:
-                pass
-                # final_tactic_code = final_tactic_code + "\nsorry"
-            response_data["tactic"] = final_tactic_code
-        else:
-            response_data["tactic"] = clean_response.replace("`", "")
+                response_data["tactic"] = clean_response.replace("`", "")
 
-        if response_data["tactic"]:
-            log_message(f"💡 Generated Tactic (Chars: {len(response_data['tactic'])})")
-        else:
-             log_message("⚠️ No tactic generated.")
+            if response_data["tactic"]:
+                log_message(f"💡 Generated Tactic (Chars: {len(response_data['tactic'])})")
+            else:
+                log_message("⚠️ No tactic generated.")
 
     print(json.dumps(response_data))
 

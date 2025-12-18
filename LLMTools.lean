@@ -1,1 +1,1 @@
-import LLMTools.Tactic
+import LLMTools.Auto

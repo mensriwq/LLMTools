@@ -57,6 +57,11 @@ structure LlmResponse where
   message     : String
   deriving FromJson
 
+inductive LlmAction where
+  | Suggest
+  | Execute
+  deriving Inhabited, BEq
+
 def getRequestStr (wType : WorkType) (phase : WorkPhase) : String :=
   match phase with
   | .Diagnose => "diagnose"
