@@ -167,6 +167,110 @@ class MockLLMProvider:
             
         return self.response
 
+def extract_context_from_source(source, pos):
+    if not source or pos is None:
+        return None, None
+
+    # 提取隐式提示
+    try:
+        source_bytes = source.encode('utf-8')
+        if pos > len(source_bytes):
+            pos = len(source_bytes)
+        prefix_bytes = source_bytes[:pos]
+        prefix = prefix_bytes.decode('utf-8', errors='ignore')
+    except Exception as e:
+        prefix = source[:pos]
+
+    lines = prefix.split('\n')
+    
+    implicit_hint = None
+    hint_lines = []
+    
+    if lines:
+        lines.pop()
+
+    while lines:
+        line = lines[-1].strip()
+        if line.startswith("--"):
+            content = line.lstrip("-").strip()
+            hint_lines.append(content)
+            lines.pop()
+        elif line:
+            break
+
+    if hint_lines:
+        implicit_hint = "\n".join(reversed(hint_lines))
+
+    # 提取定理声明
+    keywords = ["theorem", "lemma", "def", "instance", "example", "structure", "class"]
+    decl_start_index = -1
+    found_keyword = ""
+
+    for keyword in keywords:
+        pattern = re.compile(r'\b' + keyword + r'\b')
+        for match in pattern.finditer(prefix):
+            match_idx = match.start()
+            
+            line_start = prefix.rfind('\n', 0, match_idx) + 1
+            line_before_kw = prefix[line_start:match_idx]
+            if "--" in line_before_kw:
+                continue
+            if match_idx > decl_start_index:
+                decl_start_index = match_idx
+                found_keyword = keyword
+    
+    theorem_decl = "Theorem context not found."
+
+    if decl_start_index != -1:
+        raw_decl = prefix[decl_start_index:]
+        cut_idx = len(raw_decl)
+        balance = 0
+        in_string = False
+        in_char = False
+        found_end = False
+        
+        for i, char in enumerate(raw_decl):
+            if in_string:
+                if char == '"' and raw_decl[i-1] != '\\': in_string = False
+                continue
+            if in_char:
+                if char == "'" and raw_decl[i-1] != '\\': in_char = False
+                continue
+                
+            if char == '"': 
+                in_string = True
+                continue
+            if char == "'": 
+                in_char = True
+                continue
+
+            if char in '({[':
+                balance += 1
+            elif char in ')}]':
+                balance -= 1
+            if balance == 0:
+                if raw_decl[i:].startswith(":="):
+                    cut_idx = i
+                    found_end = True
+                    break
+                if (raw_decl[i:].startswith(" by ") or 
+                    raw_decl[i:].startswith("\nby ") or
+                    (raw_decl[i:].startswith("by ") and (i==0 or raw_decl[i-1].isspace()))):
+                    cut_idx = i
+                    found_end = True
+                    break
+                if (raw_decl[i:].startswith(" where ") or 
+                    raw_decl[i:].startswith("\nwhere ")):
+                    cut_idx = i
+                    found_end = True
+                    break
+
+        theorem_decl = raw_decl[:cut_idx].strip()
+        if len(theorem_decl) < len(found_keyword) + 2:
+            theorem_decl = raw_decl
+
+    return theorem_decl, implicit_hint
+
 # 注: 该服务不可用
 def perform_lean_search(query: str):
     if not requests or not BeautifulSoup:
@@ -279,10 +383,11 @@ def handle_llm_request(req):
             }))
             return
 
+    thm_decl, implicit_hint = extract_context_from_source(req.get("source") or "", req.get("pos") or 0)
     context = {
         "goal_state": req.get("goalState") or "No goal state.",
-        "thm_decl": req.get("fullThm") or "Theorem not available.",
-        "hint": req.get("hint") or "None",
+        "thm_decl": thm_decl or "Unknown Theorem, see goal.",
+        "hint": req.get("hint") or implicit_hint or "None",
         "prev_tactic": req.get("prevTactic") or "None",
         "error_msg": re.sub(r"\S+\.lean:\d+:\d+:\s*", "", req.get("errorMsg") or "None"),
         "diagnosis": req.get("diagnosisInfo") or "None",

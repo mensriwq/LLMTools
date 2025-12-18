@@ -11,18 +11,6 @@ open Lean Meta Elab Tactic
 def callLlmService (req : LlmRequest) : IO LlmResponse :=
   callPythonService req #[]
 
-def getFullTheoremType : TacticM String := do
-  let declName? ← Term.getDeclName?
-  match declName? with
-  | some name =>
-    let env ← getEnv
-    match env.find? name with
-    | some info =>
-      let type ← Meta.ppExpr info.type
-      return s!"theorem {name} : {type}"
-    | none => return "Unknown declaration"
-  | none => return "No declaration context"
-
 def runStrictCheck (tacticStx : Syntax) : TacticM Unit := do
   withoutModifyingState do
     let coreState ← getThe Core.State
@@ -140,12 +128,15 @@ unsafe def runLlmTactic (stx : Syntax) (wType : WorkType) (num? : Option (TSynta
 
   let mainGoal ← getMainGoal
   let goalState ← mainGoal.withContext do return (← ppGoal mainGoal).pretty
-  let fullThmStr ← getFullTheoremType
+  let ctx ← readThe Core.Context
+  let source := ctx.fileMap.source
+  let pos := stx.getPos?.map (·.byteIdx)
 
   let initialReq : LlmRequest := {
     requestType := "",
     goalState := goalState,
-    fullThm := some fullThmStr,
+    source := source,
+    pos := pos,
     hint := hint?,
     prevTactic := none,
     errorMsg := none,

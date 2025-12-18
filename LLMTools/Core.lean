@@ -40,7 +40,8 @@ def WorkType.defaultFuel : WorkType → Nat
 structure LlmRequest where
   requestType   : String
   goalState     : String
-  fullThm       : Option String
+  source        : Option String
+  pos           : Option Nat
   hint          : Option String
   prevTactic    : Option String
   errorMsg      : Option String
