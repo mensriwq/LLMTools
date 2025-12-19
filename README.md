@@ -29,11 +29,11 @@
     - 它将这些信息序列化为一个 JSON 对象。
 
 2.  **启动 Python 服务**:
-    - Lean 进程启动 `llm_service.py` 脚本作为一个子进程。
+    - Lean 进程启动 `service.py` 脚本作为一个子进程。
     - JSON 请求通过 `stdin` 发送给 Python 脚本。
 
 3.  **Python 端 (LLM Service)**:
-    - `llm_service.py` 接收并解析 JSON 请求。
+    - `service.py` 接收并解析 JSON 请求。
     - `PromptManager` 根据请求类型（例如 `init_next`, `diagnose`）加载并渲染对应的 Prompt 模板。
     - `CustomOpenAIProvider` 将渲染好的 Prompt 发送给配置好的 LLM API（如 OpenAI）。
     - 脚本接收 LLM 的原始响应，并根据请求类型解析出关键信息（例如，要执行的策略代码、要搜索的关键词等）。
@@ -103,7 +103,7 @@ source .venv/bin/activate
 # .venv\Scripts\activate
 
 # 安装依赖
-pip install openai requests beautifulsoup4 lxml
+pip install openai
 ```
 
 ### 4. 设置环境变量
@@ -125,7 +125,7 @@ LLM_MODEL="gpt-4o-mini"
 LEAN_LLM_PYTHON="/path/to/your/project/.venv/bin/python"
 # On Windows, it might be C:\path\to\your\project\.venv\Scripts\python.exe
 ```
-**重要**: 确保 `LEAN_LLM_PYTHON` 指向的是你在**当前项目**中创建的虚拟环境中的 Python 解释器，否则 Lean 将无法找到已安装的 `openai` 库。
+确保 `LEAN_LLM_PYTHON` 指向的是你在**当前项目**中创建的虚拟环境中的 Python 解释器，否则 Lean 将无法找到已安装的 `openai` 库。
 
 ## 🚀 使用方法
 
@@ -140,7 +140,7 @@ import LLMTools.Tactic
 import LLMTools.Tactic
 import Mathlib.Tactic
 
-theorem add_comm (a b : Nat) : a + b = b + a := by
+theorem our_add_comm (a b : Nat) : a + b = b + a := by
   -- 将光标放在这里然后输入 llm_next
   llm_next
   -- AI 可能会建议:

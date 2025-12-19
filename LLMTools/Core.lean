@@ -81,7 +81,7 @@ def findPythonScriptPath : IO String := do
     if ← FilePath.pathExists envPath then
       return envPath
 
-  let relativePath : FilePath := "LLMService" / "llm_service.py"
+  let relativePath : FilePath := "LLMService" / "service.py"
   if ← FilePath.pathExists relativePath then
     return relativePath.toString
 
@@ -91,18 +91,18 @@ def findPythonScriptPath : IO String := do
     let entries ← System.FilePath.readDir lakePackagesDir
     for entry in entries do
       if ← FilePath.isDir entry.path then
-        -- .lake/packages/<PackageName>/LLMService/llm_service.py
+        -- .lake/packages/<PackageName>/LLMService/service.py
         let candidate := entry.path / relativePath
         if ← candidate.pathExists then
           return candidate.toString
 
   throw <| IO.userError <|
-    s!"[LLMTools] Could not locate 'llm_service.py'.\n" ++
+    s!"[LLMTools] Could not locate 'service.py'.\n" ++
     s!"Searched in:\n" ++
     s!"  1. $LEAN_LLM_SCRIPT_PATH\n" ++
     s!"  2. ./{relativePath}\n" ++
     s!"  3. ./.lake/packages/*/{relativePath}\n\n" ++
-    "Please ensure the package is built or set LEAN_LLM_SCRIPT_PATH as the path of LLMService/llm_service.py."
+    "Please ensure the package is built or set LEAN_LLM_SCRIPT_PATH as the path of LLMService/service.py."
 
 def callPythonService {α β : Type} [ToJson α] [FromJson β] (req : α) (extraArgs : Array String := #[]) : IO β := do
   let jsonStr := (ToJson.toJson req).compress ++ "\n"
