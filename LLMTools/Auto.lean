@@ -11,13 +11,13 @@ unsafe def runChainMode (plan : List String) (stx : Syntax) : TacticM Unit := do
   let finalCode ← withoutModifyingState do
     let mut codeAccum := ""
     for step in plan do
-      logInfo s!"[Auto Chain] Processing: {step}"
+      dbg_trace s!"[Auto Chain] Processing: {step}"
       try
         let stepCode ← runChainStep step stx
         codeAccum := codeAccum ++ stepCode ++ "\n"
       catch e =>
         let m ← e.toMessageData.toString
-        logWarning s!"[Auto Chain] Step failed: {m}."
+        dbg_trace s!"[Auto Chain] Step failed: {m}."
         break
 
     return codeAccum

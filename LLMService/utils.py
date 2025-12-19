@@ -14,6 +14,35 @@ except ImportError:
 
 LOG_FILE = "llm_agent.log"
 CACHE_FILE = "llm_cache.json"
+CONFIG_FILE = "config.json"
+
+_config_cache = None
+
+def _load_config():
+    global _config_cache
+    if _config_cache is not None:
+        return _config_cache
+
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), CONFIG_FILE)
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                _config_cache = json.load(f)
+                log_message(f"✅ Loaded configuration from {CONFIG_FILE}")
+                return _config_cache
+        except Exception as e:
+            log_message(f"⚠️  Error loading {CONFIG_FILE}: {e}. Falling back to environment variables.")
+            _config_cache = {}
+            return _config_cache
+    
+    _config_cache = {}
+    return _config_cache
+
+def getenv(key, default=None):
+    config = _load_config()
+    if key in config and config[key] is not None:
+        return config[key]
+    return os.getenv(key, default)
 
 def log_message(msg):
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -61,9 +90,6 @@ class CacheManager:
 
     def set(self, goal, hint, work_type, code):
         key = self._generate_key(goal, hint, work_type)
-        if "```lean" not in code:
-            code = f"```lean\n{code}\n```"
-        
         self.cache[key] = code
         self._save_cache()
         log_message(f"💾 Cached success for [{work_type}]")
@@ -202,6 +228,28 @@ def extract_context_from_source(source, pos):
             theorem_decl = raw_decl
 
     return theorem_decl, implicit_hint
+
+def find_code(lang, text):
+    pattern = r'```(\w*)?\s*\n(.*?)\n```'
+    matches = re.finditer(pattern, text, re.DOTALL)
+    code_block = None
+    fallback_block = None
+    
+    for match in matches:
+        language = match.group(1)
+        code = match.group(2).strip()
+        
+        if language == lang:
+            code_block = code
+        elif language is None or language == '':
+            fallback_block = code
+
+    if code_block:
+        log_message(f"Here is code {code_block}")
+        return code_block
+    if fallback_block:
+        return fallback_block
+    return text
 
 def perform_lean_search(query: str):
     raise NotImplementedError("Won't work.")

@@ -11,6 +11,17 @@ open Lean Meta Elab Tactic
 def callLlmService (req : LlmRequest) : IO LlmResponse :=
   callPythonService req #[]
 
+def parseCodeToSyntax (env : Environment) (code : String) : Except String (TSyntax `tactic) := do
+  let wrappedCode := "{\n" ++ code ++ "\n}"
+  match Parser.runParserCategory env `tactic wrappedCode with
+  | Except.error e => Except.error e
+  | Except.ok stx =>
+    if stx.isOfKind ``Lean.Parser.Tactic.tacticSeqBracketed then
+      let inner := stx[1]
+      Except.ok ⟨inner⟩
+    else
+      Except.ok ⟨stx⟩
+
 def runStrictCheck (tacticStx : Syntax) : TacticM Unit := do
   withoutModifyingState do
     let coreState ← getThe Core.State
@@ -80,7 +91,7 @@ unsafe def generateLlmTactic (fuel : Nat) (wType : WorkType) (phase : WorkPhase)
       else
         logInfo s!"{logPrefix} Trying:\n{tacticCode}"
 
-      match Parser.runParserCategory (← getEnv) `tactic ("{\n" ++ tacticCode ++ "\n}") with
+      match parseCodeToSyntax (← getEnv) tacticCode with
       | Except.error e =>
         logWarning s!"{logPrefix}{e} Syntax error. Retrying..."
         let newReq := { req with prevTactic := some tacticCode, errorMsg := some s!"Syntax Error: {e}" }

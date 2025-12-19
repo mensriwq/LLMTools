@@ -4,7 +4,10 @@ We are fixing a failed proof step.
    {thm_decl}
 
 2. CONTEXT
-   Failed Tactic: `{prev_tactic}`
+   Failed Tactic: 
+   ```lean
+   {prev_tactic}
+   ```
    Error Message: {error_msg}
 
 3. YOUR DIAGNOSIS

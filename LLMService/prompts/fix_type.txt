@@ -4,7 +4,10 @@ We are fixing a failed LEMMA DECLARATION.
    {thm_decl}
 
 2. CONTEXT
-   Failed Code: `{prev_tactic}`
+   Failed Code: 
+   ```lean
+   {prev_tactic}
+   ```
    Error Message: {error_msg}
 
 3. YOUR DIAGNOSIS

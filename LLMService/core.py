@@ -2,7 +2,7 @@ import os
 import json
 import re
 import textwrap
-from utils import CacheManager, log_message, extract_context_from_source
+from utils import CacheManager, log_message, extract_context_from_source, find_code, getenv
 from providers import PromptManager, CustomOpenAIProvider, MockLLMProvider
 
 class LLMCore:
@@ -10,7 +10,7 @@ class LLMCore:
         self.cache_manager = CacheManager()
         self.prompt_manager = PromptManager()
         
-        provider_name = os.getenv("LLM_PROVIDER", "openai").lower()
+        provider_name = getenv("LLM_PROVIDER", "openai").lower()
         if provider_name == "mock":
             self.provider = MockLLMProvider()
         else:
@@ -93,28 +93,23 @@ class LLMCore:
         clean_response = re.sub(r'<think>.*?</think>', '', raw_response, flags=re.DOTALL)
         if req_type == "init_auto":
             try:
-                clean_json = re.sub(r'```json\s*|\s*```', '', clean_response).strip()
-                start, end = clean_json.find('{'), clean_json.rfind('}') + 1
-                if start != -1 and end != 0: clean_json = clean_json[start:end]
-                
-                response_data["analysis"] = json.dumps(json.loads(clean_json)) # Verify JSON validity
+                clean_json = find_code("json", clean_response) or clean_response.strip()
+                parsed = json.loads(clean_json)
+                response_data["analysis"] = json.dumps(parsed)
                 response_data["message"] = "Plan Generated"
                 return response_data
-            except Exception:
-                response_data["analysis"] = json.dumps({"type": "COMPOUND", "plan": ["Fallback"]})
+            except Exception as e:
+                log_message(f"❌ JSON Parse Error in init_auto: {e}")
+                log_message(f"Raw Output: {clean_response}")
+                response_data["analysis"] = json.dumps({"type": "COMPOUND", "plan": ["Fallback due to parse error"]})
                 return response_data
-
-        code_match = re.search(r'```(?:lean)?(.*?)```', clean_response, re.DOTALL)
-        if code_match:
-            raw_tactic = code_match.group(1)
+        else:
+            raw_tactic = find_code("lean", clean_response) or clean_response.replace("`", "").strip()
             lines = raw_tactic.split('\n')
             while lines and not lines[0].strip(): lines.pop(0)
             while lines and not lines[-1].strip(): lines.pop()
             response_data["tactic"] = textwrap.dedent("\n".join(lines))
-        else:
-            response_data["tactic"] = clean_response.replace("`", "").strip()
-
-        return response_data
+            return response_data
 
     def process_full_request(self, req):
         req_type = req.get("requestType", "init_next")

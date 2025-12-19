@@ -16,3 +16,9 @@ __pycache__/
 Thumbs.db/.lake
 
 *.log
+
+# User config
+config.json
+
+# LLM cache
+llm_cache.json
