@@ -7,6 +7,27 @@ structure AutoPlan where
   plan : List String
   deriving FromJson
 
+unsafe def runChainStep (stepDesc : String) (refStx : Syntax) : TacticM String := do
+  let mainGoal ← getMainGoal
+  let goalState ← mainGoal.withContext do return (← ppGoal mainGoal).pretty
+  let ctx ← readThe Core.Context
+
+  let req : LlmRequest := {
+    requestType := "",
+    goalState := goalState,
+    source := ctx.fileMap.source,
+    pos := refStx.getPos?.map (·.byteIdx),
+    hint := some s!"[Chain Step]: {stepDesc}",
+    prevTactic := none, errorMsg := none, searchResults := none, diagnosisInfo := none
+  }
+
+  match ← generateLlmTactic (WorkType.TypeGen).defaultFuel .TypeGen .Init req refStx with
+  | some (code, wrappedTStx) =>
+    evalTactic (unwrapTactic wrappedTStx)
+    return code
+  | none =>
+    throwError s!"Failed to generate chain step: {stepDesc}"
+
 unsafe def runChainMode (plan : List String) (stx : Syntax) : TacticM Unit := do
   let finalCode ← withoutModifyingState do
     let mut codeAccum := ""
@@ -23,7 +44,11 @@ unsafe def runChainMode (plan : List String) (stx : Syntax) : TacticM Unit := do
     return codeAccum
 
   if !finalCode.isEmpty then
-    Lean.Meta.Tactic.TryThis.addSuggestion stx finalCode
+    match parseToWrappedTactic (← getEnv) finalCode with
+    | Except.ok finalWrappedTStx =>
+      Lean.Meta.Tactic.TryThis.addSuggestion stx finalWrappedTStx
+    | Except.error _ =>
+      Lean.Meta.Tactic.TryThis.addSuggestion stx finalCode
 
 
 syntax (name := llm_auto) "llm_auto" (ppSpace str)? : tactic

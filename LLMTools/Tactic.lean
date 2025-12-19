@@ -11,16 +11,17 @@ open Lean Meta Elab Tactic
 def callLlmService (req : LlmRequest) : IO LlmResponse :=
   callPythonService req #[]
 
-def parseCodeToSyntax (env : Environment) (code : String) : Except String (TSyntax `tactic) := do
+def parseToWrappedTactic (env : Environment) (code : String) : Except String (TSyntax `tactic) := do
   let wrappedCode := "{\n" ++ code ++ "\n}"
   match Parser.runParserCategory env `tactic wrappedCode with
   | Except.error e => Except.error e
-  | Except.ok stx =>
-    if stx.isOfKind ``Lean.Parser.Tactic.tacticSeqBracketed then
-      let inner := stx[1]
-      Except.ok ⟨inner⟩
-    else
-      Except.ok ⟨stx⟩
+  | Except.ok stx => Except.ok ⟨stx⟩
+
+def unwrapTactic (stx : Syntax) : TSyntax `tactic :=
+  if stx.isOfKind ``Lean.Parser.Tactic.tacticSeqBracketed then
+    ⟨stx[1]⟩
+  else
+    ⟨stx⟩
 
 def runStrictCheck (tacticStx : Syntax) : TacticM Unit := do
   withoutModifyingState do
@@ -91,23 +92,21 @@ unsafe def generateLlmTactic (fuel : Nat) (wType : WorkType) (phase : WorkPhase)
       else
         logInfo s!"{logPrefix} Trying:\n{tacticCode}"
 
-      match parseCodeToSyntax (← getEnv) tacticCode with
+      match parseToWrappedTactic (← getEnv) tacticCode with
       | Except.error e =>
         logWarning s!"{logPrefix}{e} Syntax error. Retrying..."
         let newReq := { req with prevTactic := some tacticCode, errorMsg := some s!"Syntax Error: {e}" }
         generateLlmTactic (fuel - 1) wType .Fix newReq refStx
 
-      | Except.ok tacticStx =>
+      | Except.ok wrappedTStx =>
         let checkRes ← (try
-            runStrictCheck tacticStx
+            runStrictCheck (unwrapTactic wrappedTStx)
             pure (Except.ok ())
           catch e =>
             pure (Except.error e))
 
         match checkRes with
         | Except.ok _ =>
-          let tacticSyntax : TSyntax `tactic := ⟨tacticStx⟩
-
           let successReq := { req with
             requestType := "report_success",
             prevTactic := some tacticCode,
@@ -115,7 +114,7 @@ unsafe def generateLlmTactic (fuel : Nat) (wType : WorkType) (phase : WorkPhase)
           }
           let _ ← runIO (callLlmService successReq)
 
-          return some (tacticCode, tacticSyntax)
+          return some (tacticCode, wrappedTStx)
 
         | Except.error e =>
           let msg ← e.toMessageData.toString
@@ -149,27 +148,6 @@ unsafe def runInteractiveLlm (stx : Syntax) (wType : WorkType) (num? : Option (T
     logInfo s!"{getLogPrefix wType} Verification Passed!"
   | none =>
     logError "LLM failed to generate valid code."
-
-unsafe def runChainStep (stepDesc : String) (refStx : Syntax) : TacticM String := do
-  let mainGoal ← getMainGoal
-  let goalState ← mainGoal.withContext do return (← ppGoal mainGoal).pretty
-  let ctx ← readThe Core.Context
-
-  let req : LlmRequest := {
-    requestType := "",
-    goalState := goalState,
-    source := ctx.fileMap.source,
-    pos := refStx.getPos?.map (·.byteIdx),
-    hint := some s!"[Chain Step]: {stepDesc}",
-    prevTactic := none, errorMsg := none, searchResults := none, diagnosisInfo := none
-  }
-
-  match ← generateLlmTactic (WorkType.TypeGen).defaultFuel .TypeGen .Init req refStx with
-  | some (code, stx) =>
-    evalTactic stx
-    return code
-  | none =>
-    throwError s!"Failed to generate chain step: {stepDesc}"
 
 syntax (name := llm_next) "llm_next" (ppSpace num)? (ppSpace str)? : tactic
 @[tactic llm_next] unsafe def evalLlmNext : Tactic := fun stx => do
