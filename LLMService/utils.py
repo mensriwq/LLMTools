@@ -153,7 +153,9 @@ def extract_context_from_source(source, pos):
             content = line.lstrip("-").strip()
             hint_lines.append(content)
             lines.pop()
-        elif line:
+        elif not line:
+            lines.pop()
+        else:
             break
 
     if hint_lines:
