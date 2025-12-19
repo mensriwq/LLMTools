@@ -8,13 +8,14 @@
 {hint}
 
 TASK:
-Propose a single intermediate lemma (type) that would make progress towards the goal.
+Propose a single intermediate lemma (type) that decomposes the problem.
 
 GUIDELINES:
-1. If the User Hint specifies a lemma (e.g., "use induction on n" or "assert n > 0"), formulate that exact statement.
-2. If no hint, analyze the logical gap. What missing fact would make the goal trivial?
-3. Define the type clearly using `have` or `suffices`.
-4. Leave the proof of this new fact as `sorry`.
+1. **Logic Gap**: What missing fact makes the goal trivial?
+2. **Non-Triviality**: Do NOT simply assert the goal itself.
+3. **Contrapositives**: You MAY introduce a contrapositive or equivalent form if it makes the proof easier (e.g., transforming a Not-Exists into Forall).
+4. **Structure**: Define the type clearly using `have` or `suffices`.
+5. **Yield**: If you cannot find a helpful decomposition, output `GIVEUP`.
 
 EXAMPLE OUTPUT:
 ```lean

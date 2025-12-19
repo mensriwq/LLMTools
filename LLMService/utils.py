@@ -247,7 +247,6 @@ def find_code(lang, text):
             fallback_block = code
 
     if code_block:
-        log_message(f"Here is code {code_block}")
         return code_block
     if fallback_block:
         return fallback_block

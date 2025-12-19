@@ -77,6 +77,7 @@ class LLMCore:
             "success": True,
             "message": "OK"
         }
+
         if "diagnose" in req_type:
             analysis_match = re.search(r'ANALYSIS:\s*(.+?)(?=SEARCH:|$)', raw_response, re.DOTALL | re.IGNORECASE)
             search_match = re.search(r'SEARCH:\s*(.+)', raw_response, re.IGNORECASE)
@@ -90,7 +91,9 @@ class LLMCore:
             response_data["searchQuery"] = raw_query
             response_data["tactic"] = "skip"
             return response_data
+        
         clean_response = re.sub(r'<think>.*?</think>', '', raw_response, flags=re.DOTALL)
+
         if req_type == "init_auto":
             try:
                 clean_json = find_code("json", clean_response) or clean_response.strip()
@@ -103,8 +106,15 @@ class LLMCore:
                 log_message(f"Raw Output: {clean_response}")
                 response_data["analysis"] = json.dumps({"type": "COMPOUND", "plan": ["Fallback due to parse error"]})
                 return response_data
+
+
         else:
             raw_tactic = find_code("lean", clean_response) or clean_response.replace("`", "").strip()
+            if "GIVEUP" in raw_tactic:
+                 response_data["success"] = False
+                 response_data["message"] = "AI explicitly gave up."
+                 return response_data
+
             lines = raw_tactic.split('\n')
             while lines and not lines[0].strip(): lines.pop(0)
             while lines and not lines[-1].strip(): lines.pop()
