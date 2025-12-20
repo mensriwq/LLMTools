@@ -94,7 +94,7 @@ class LLMCore:
         
         clean_response = re.sub(r'<think>.*?</think>', '', raw_response, flags=re.DOTALL)
 
-        if req_type == "init_auto":
+        if req_type == "init_auto" or req_type == "init_auto_one":
             try:
                 clean_json = find_code("json", clean_response) or clean_response.strip()
                 parsed = json.loads(clean_json)
@@ -102,9 +102,11 @@ class LLMCore:
                 response_data["message"] = "Plan Generated"
                 return response_data
             except Exception as e:
-                log_message(f"❌ JSON Parse Error in init_auto: {e}")
-                log_message(f"Raw Output: {clean_response}")
-                response_data["analysis"] = json.dumps({"type": "COMPOUND", "plan": ["Fallback due to parse error"]})
+                log_message(f"❌ JSON Parse Error in {req_type}: {e}")
+                if req_type == "init_auto_one":
+                     response_data["analysis"] = json.dumps({"action": "next", "hint": "Fallback: JSON parse error"})
+                else:
+                     response_data["analysis"] = json.dumps({"type": "COMPOUND", "plan": ["Fallback"]})
                 return response_data
 
 

@@ -7,6 +7,11 @@ structure AutoPlan where
   plan : List String
   deriving FromJson
 
+structure AutoOnePlan where
+  action : String
+  hint   : String
+  deriving FromJson
+
 unsafe def runChainStep (stepDesc : String) (refStx : Syntax) : TacticM String := do
   let mainGoal ← getMainGoal
   let goalState ← mainGoal.withContext do return (← ppGoal mainGoal).pretty
@@ -93,3 +98,54 @@ syntax (name := llm_auto) "llm_auto" (ppSpace str)? : tactic
   | none =>
     logWarning "[Auto] Failed to parse plan. Defaulting to Framework."
     runInteractiveLlm stx .Framework none (hint?.map (Lean.Syntax.mkStrLit))
+
+syntax (name := llm_auto_one) "llm_auto_one" (ppSpace str)? : tactic
+@[tactic llm_auto_one] unsafe def evalLlmAutoOne : Tactic := fun stx => do
+  let hint? := match stx with
+    | `(tactic| llm_auto_one $[$s:str]?) => s.map (·.getString)
+    | _ => none
+
+  let mainGoal ← getMainGoal
+  let goalState ← mainGoal.withContext do return (← ppGoal mainGoal).pretty
+  let ctx ← readThe Core.Context
+
+  let req : LlmRequest := {
+    requestType := "init_auto_one",
+    goalState := goalState,
+    source := ctx.fileMap.source,
+    pos := stx.getPos?.map (·.byteIdx),
+    hint := hint?,
+    prevTactic := none, errorMsg := none, searchResults := none, diagnosisInfo := none
+  }
+
+  logInfo "[AutoOne] Thinking..."
+  let res : LlmResponse ← runIO (callPythonService req)
+
+  let decision? : Option AutoOnePlan := do
+    let analysisStr ← res.analysis
+    let json ← Json.parse analysisStr |>.toOption
+    FromJson.fromJson? json |>.toOption
+
+  match decision? with
+  | some decision =>
+    let action := decision.action.trim.toLower
+    let aiHint := decision.hint
+
+    logInfo s!"[AutoOne] Decision: {action.toUpper}\n[Instruction]: {aiHint}"
+
+    let hintStx := Lean.Syntax.mkStrLit aiHint
+
+    match action with
+    | "done" =>
+      runInteractiveLlm stx .Done none (some hintStx)
+    | "type" =>
+      runInteractiveLlm stx .TypeGen none (some hintStx)
+    | "next" =>
+      runInteractiveLlm stx .Next none (some hintStx)
+    | _ =>
+      logWarning s!"[AutoOne] Unknown action '{action}'. Defaulting to Next."
+      runInteractiveLlm stx .Next none (some hintStx)
+
+  | none =>
+    logError "[AutoOne] Failed to parse decision. Falling back to simple Next."
+    runInteractiveLlm stx .Next none (hint?.map (Lean.Syntax.mkStrLit))

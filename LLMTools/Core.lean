@@ -6,6 +6,7 @@ inductive WorkType where
   | Next
   | Framework
   | TypeGen
+  | Done
   | Revise
   | Fallback
   deriving Inhabited, BEq, Repr
@@ -15,6 +16,7 @@ instance : ToString WorkType where
     | .Next      => "next"
     | .Framework => "framework"
     | .TypeGen   => "type"
+    | .Done      => "done"
     | .Revise    => "revise"
     | .Fallback  => "fallback"
 
@@ -34,6 +36,7 @@ def WorkType.defaultFuel : WorkType → Nat
   | .Next      => 6
   | .Framework => 3
   | .TypeGen   => 4
+  | .Done      => 3
   | .Revise    => 5
   | .Fallback  => 3
 

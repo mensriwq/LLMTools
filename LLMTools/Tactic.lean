@@ -172,3 +172,9 @@ syntax (name := llm_revise) "llm_revise" (ppSpace num)? (ppSpace str) : tactic
   match stx with
   | `(tactic| llm_revise $[$n:num]? $s) => runInteractiveLlm stx .Revise n (some s)
   | _ => throwUnsupportedSyntax
+
+syntax (name := llm_done) "llm_done" (ppSpace num)? (ppSpace str)? : tactic
+@[tactic llm_done] unsafe def evalLlmDone : Tactic := fun stx => do
+  match stx with
+  | `(tactic| llm_done $[$n:num]? $[$s:str]?) => runInteractiveLlm stx .Done n s
+  | _ => throwUnsupportedSyntax

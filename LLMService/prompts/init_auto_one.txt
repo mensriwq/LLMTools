@@ -1,0 +1,11 @@
+[Full Theorem]:
+{thm_decl}
+
+[Current Goal]:
+{goal_state}
+
+[User Hint]:
+{hint}
+
+TASK: Decide the next move (DONE, TYPE, or NEXT) and provide instructions.
+Return the decision in JSON format.

@@ -1,0 +1,7 @@
+[Current Goal]:
+{goal_state}
+
+[Manager Hint]:
+{hint}
+
+TASK: Close this goal immediately.
