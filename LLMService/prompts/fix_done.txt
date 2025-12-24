@@ -1,0 +1,26 @@
+We are fixing a failed attempt to CLOSE the goal immediately.
+
+1. Full Theorem:
+   {thm_decl}
+
+2. CONTEXT
+   Failed Code:
+   ```lean
+   {prev_tactic}
+   ```
+   Error Message: {error_msg}
+
+3. DIAGNOSIS
+   {diagnosis}
+
+4. SEARCH RESULTS
+   {search_results}
+
+5. CURRENT GOAL
+   {goal_state}
+
+INSTRUCTIONS:
+1. The previous attempt to close the goal failed.
+2. Your ONLY objective is to finish the proof of this goal (no `sorry`).
+3. Output the corrected code block.
+4. If it is impossible to close the goal with the information provided, output `GIVEUP`.
